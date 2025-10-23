@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 import boto3
 import cloudpickle
@@ -15,13 +16,17 @@ load_dotenv()
 
 username = os.getenv("MLFLOW_TRACKING_USERNAME")
 password = os.getenv("MLFLOW_TRACKING_PASSWORD")
-port = os.getenv("MLFLOW_PORT", 5050)
+port = os.getenv("MLFLOW_PORT", "5050")
 tracking_uri = f"http://{username}:{password}@localhost:{port}"
 s3_endpoint = "http://localhost:9000"
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = s3_endpoint
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+MODEL_PATH = Path("model_repository/logreg/1/model.onnx")
+TRANSFORM_PATH = Path("model_repository/text_preprocess/1/transform.pkl")
+PROBABILITY_TOLERANCE = 1e-5
 
 
 def main() -> None:
@@ -34,11 +39,7 @@ def main() -> None:
     model_pipeline = mlflow.sklearn.load_model(model_uri)
     logger.info("Loading complete")
 
-    messages = [
-        "Первое сообщение",
-        "Второе",
-        "Я — ChatGPT, искусственный интеллект"
-    ]
+    messages = ["Первое сообщение", "Второе", "Я — ChatGPT, искусственный интеллект"]
 
     transform = Pipeline(model_pipeline.steps[:-1])
     model = model_pipeline.steps[-1][1]
@@ -48,20 +49,16 @@ def main() -> None:
 
     logger.info("Start convert")
     onx = to_onnx(model, input_matrix, options=options)
-    with open("model_repository/logreg/1/model.onnx", "wb") as f:
-        f.write(onx.SerializeToString())
+    with MODEL_PATH.open("wb") as file:
+        file.write(onx.SerializeToString())
 
-    with open("model_repository/text_preprocess/1/transform.pkl", "wb") as f:
-        cloudpickle.dump(transform, f)
+    with TRANSFORM_PATH.open("wb") as file:
+        cloudpickle.dump(transform, file)
 
     logger.info("Convertion is ended")
 
     logger.info("Start check")
-    test_messages = [
-        "Какое-то новое сообщение",
-        "И тут же второе",
-        "Я человек, не баньте"
-    ]
+    test_messages = ["Какое-то новое сообщение", "И тут же второе", "Я человек, не баньте"]
 
     input_matrix = transform.transform(test_messages).toarray().astype(np.float32)
 
@@ -72,7 +69,13 @@ def main() -> None:
     raw_proba = model.predict_proba(input_matrix)
     onnx_proba = onnx_model.run([outs[1]], {inp: input_matrix})[0]
 
-    assert np.linalg.norm(raw_proba - onnx_proba) < 1e-5
+    difference_norm = np.linalg.norm(raw_proba - onnx_proba)
+    if difference_norm >= PROBABILITY_TOLERANCE:
+        error_message = (
+            "The ONNX model predictions deviate from the original pipeline: "
+            f"{difference_norm} >= {PROBABILITY_TOLERANCE}."
+        )
+        raise ValueError(error_message)
     logger.info("Check is successful")
 
     logger.info("Uploading model to S3")
@@ -82,8 +85,8 @@ def main() -> None:
         aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
     )
-    s3_client.upload_file("model_repository/logreg/1/model.onnx", "models", "triton/model.onnx")
-    s3_client.upload_file("model_repository/text_preprocess/1/transform.pkl", "models", "triton/transform.pkl")
+    s3_client.upload_file(str(MODEL_PATH), "models", "triton/model.onnx")
+    s3_client.upload_file(str(TRANSFORM_PATH), "models", "triton/transform.pkl")
     logger.info("Upload complete")
 
 

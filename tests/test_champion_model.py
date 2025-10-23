@@ -1,5 +1,6 @@
 import json
 import os
+from pathlib import Path
 
 import mlflow
 import mlflow.sklearn
@@ -9,7 +10,7 @@ load_dotenv()
 
 username = os.getenv("MLFLOW_TRACKING_USERNAME")
 password = os.getenv("MLFLOW_TRACKING_PASSWORD")
-port = os.getenv("MLFLOW_PORT", 5050)
+port = os.getenv("MLFLOW_PORT", "5050")
 tracking_uri = f"http://{username}:{password}@localhost:{port}"
 os.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://localhost:9000"
 
@@ -22,21 +23,18 @@ def main() -> None:
 
     model = mlflow.sklearn.load_model(model_uri)
 
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    dialog_path = os.path.join(base_dir, "sample_dialog.json")
-    with open(dialog_path, encoding="utf-8") as f:
-        dialog_data = json.load(f)
+    base_dir = Path(__file__).resolve().parent
+    dialog_path = base_dir / "sample_dialog.json"
+    with dialog_path.open(encoding="utf-8") as file:
+        dialog_data = json.load(file)
 
     dialog_id, messages = next(iter(dialog_data.items()))  # Берём первые попавшиеся ключ и значение из словаря
-    first = " ".join([k["text"] for k in messages["0"] if k["participant_index"]=="0"])  # Фразы первого участника
-    second = " ".join([k["text"] for k in messages["0"] if k["participant_index"]=="1"])  # Фразы второго участника
+    first = " ".join([k["text"] for k in messages["0"] if k["participant_index"] == "0"])  # Фразы первого участника
+    second = " ".join([k["text"] for k in messages["0"] if k["participant_index"] == "1"])  # Фразы второго участника
     messages = [first, second]
 
-    participant_index = 0
-    for msg in messages:
+    for _participant_index, msg in enumerate(messages):
         model.predict_proba(msg)[0, 1]
-
-        participant_index += 1
 
 
 if __name__ == "__main__":

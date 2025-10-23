@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Any
+
 import numpy as np
 import triton_python_backend_utils as pb_utils
 
@@ -6,11 +10,12 @@ NAME_OUTPUT_PROB = "probability"
 
 
 class TritonPythonModel:
-    def initialize(self, args) -> None:
-        pass
+    def initialize(self, _args: dict[str, Any] | None = None) -> None:
+        """Initialize Triton model instance."""
 
-    def execute(self, requests):
-        responses = []
+    def execute(self, requests: list[pb_utils.InferenceRequest]) -> list[pb_utils.InferenceResponse]:
+        """Produce responses with class-one probabilities."""
+        responses: list[pb_utils.InferenceResponse] = []
         for request in requests:
             proba_tensor = pb_utils.get_input_tensor_by_name(request, NAME_INPUT_PROB)
             probas = proba_tensor.as_numpy()
@@ -22,5 +27,4 @@ class TritonPythonModel:
         return responses
 
     def finalize(self) -> None:
-        pass
-
+        """Cleanup hook invoked when the model is unloaded."""

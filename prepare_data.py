@@ -1,3 +1,7 @@
+"""Utilities for preparing bot detection datasets."""
+
+# ruff: noqa: RUF003
+
 from pathlib import Path
 
 import pandas as pd
@@ -33,37 +37,28 @@ def prepare_data(data_path: str = DATA_PATH) -> None:
     # ------------------------------------------------------------>>>
     train_dialogs = (
         train_raw.iloc[0]  # превращаем pandas.DataFrame из одной строки в pandas.Series
-          .rename("dialog")  # имя полученной серии - "0" (по индексу строки pandas.DataFrame, из которой она
-            # получилась) - переименовываем
-          .reset_index()  # ресетим индекс, чтобы id диалогов из индекса стали столбцом; при этом снова получаем
-            # pandas.DataFrame, т.к. у объекта будет уже два столбца, а у серии может быть только один
-          .rename({"index": "dialog_id"}, axis=1)  # либо .rename(columns={'index': 'dialog_id'})
+        .rename("dialog")  # имя полученной серии - "0" (по индексу строки pandas.DataFrame, из которой она
+        # получилась) - переименовываем
+        .reset_index()  # ресетим индекс, чтобы id диалогов из индекса стали столбцом; при этом снова получаем
+        # pandas.DataFrame, т.к. у объекта будет уже два столбца, а у серии может быть только один
+        .rename({"index": "dialog_id"}, axis=1)  # либо .rename(columns={'index': 'dialog_id'})
     )
 
     labels_wide = (
-        df_classes_train
-          .pivot_table(  # хотим преобразовать таблицу так, чтобы столбец "dialog_id" имел уникальные значения
-              index="dialog_id",  # агрегиуем по столбцу "dialog_id"
-              columns="participant_index",  # превращаем значения столбца "participant_index" в отдельные столбцы
-              values="is_bot",  # в значения новых столбцов подставляем значения из стобца "is_bot"
-              aggfunc="first"  # выбираем функцию агрегации (при агрегации в каждой группе будет нескольк строк,
-               # при этом в итоговой таблице кажду группу строк заменит одна единственная строка, поэтому нужно
-               # выбрать функцию, которая будет определять, какое значение подставлять в итоговые строки: в данном
-               # случае подойдёт "first" или "last" - подумайте сами почему :)
-          )
-          .rename(columns={0: "participant_0_is_bot", 1: "participant_1_is_bot"})
-          .reset_index()
+        df_classes_train.pivot_table(
+            index="dialog_id",
+            columns="participant_index",
+            values="is_bot",
+            aggfunc="first",
+        )
+        .rename(columns={0: "participant_0_is_bot", 1: "participant_1_is_bot"})
+        .reset_index()
     )
 
     # Мёрджим трейн-датасет с лэйблами
     train_df = train_dialogs.merge(labels_wide, on="dialog_id", how="left")
 
-    test_df = (
-        test_raw.iloc[0]
-          .rename("dialog")
-          .reset_index()
-          .rename(columns={"index": "dialog_id"})
-    )
+    test_df = test_raw.iloc[0].rename("dialog").reset_index().rename(columns={"index": "dialog_id"})
     # <<<------------------------------------------------------------
 
     # # 2.2 Разделим теперь сообщения по участникам диалогов
@@ -75,12 +70,18 @@ def prepare_data(data_path: str = DATA_PATH) -> None:
             for msg in row.dialog  # пробегаем по всем сообщеням диалогоа
             if msg["participant_index"] == "0"  # берём, если индекс участника равен "0"
         ],
-        axis=1  # применяем функцию к столбцам, т.е. пробегаем по строкам
-         # (по дефолту стотит axis=0, что соответсвует пробеганию по столбцам)
+        axis=1,  # применяем функцию к столбцам, т.е. пробегаем по строкам
+        # (по дефолту стотит axis=0, что соответсвует пробеганию по столбцам)
     )
-    train_df["participant_1_messages"] = train_df.apply(lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "1"], axis=1)
-    test_df["participant_0_messages"] = test_df.apply(lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "0"], axis=1)
-    test_df["participant_1_messages"] = test_df.apply(lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "1"], axis=1)
+    train_df["participant_1_messages"] = train_df.apply(
+        lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "1"], axis=1
+    )
+    test_df["participant_0_messages"] = test_df.apply(
+        lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "0"], axis=1
+    )
+    test_df["participant_1_messages"] = test_df.apply(
+        lambda row: [msg["text"] for msg in row.dialog if msg["participant_index"] == "1"], axis=1
+    )
 
     # Теперь каждый список сообщенй объединим в одно сообщение (можно было сделать во время прошлой операции)
     # Операция пременяется к конкретному столбцу, поэтому можно не указывать axis=1
@@ -96,31 +97,23 @@ def prepare_data(data_path: str = DATA_PATH) -> None:
     # ID — комбинированное поле (dialog_id_participantIndex)
     # text — строка, объединяющая в себе все сообщения участника
     # is_bot — метка класса
-    train_df_0 = (
-        train_df.assign(ID=train_df.dialog_id+"_0")
-            .rename({"participant_0_messages": "text", "participant_0_is_bot": "is_bot"}, axis=1)
-            [["ID", "text", "is_bot"]]
-    )
-    train_df_1 = (
-        train_df.assign(ID=train_df.dialog_id+"_1")
-            .rename({"participant_1_messages": "text", "participant_1_is_bot": "is_bot"}, axis=1)
-            [["ID", "text", "is_bot"]]
-    )
+    train_df_0 = train_df.assign(ID=train_df.dialog_id + "_0").rename(
+        {"participant_0_messages": "text", "participant_0_is_bot": "is_bot"}, axis=1
+    )[["ID", "text", "is_bot"]]
+    train_df_1 = train_df.assign(ID=train_df.dialog_id + "_1").rename(
+        {"participant_1_messages": "text", "participant_1_is_bot": "is_bot"}, axis=1
+    )[["ID", "text", "is_bot"]]
     train_prepared = pd.concat([train_df_0, train_df_1], ignore_index=True)
 
     # Тест-данные приводим к виду:
     # ID — комбинированное поле (dialog_id_participantIndex)
     # text — строка, объединяющая в себе все сообщения участника
-    test_df_0 = (
-        test_df.assign(ID=test_df.dialog_id+"_0")
-            .rename({"participant_0_messages": "text"}, axis=1)
-            [["ID", "text"]]
-    )
-    test_df_1 = (
-        test_df.assign(ID=test_df.dialog_id+"_1")
-            .rename({"participant_1_messages": "text"}, axis=1)
-            [["ID", "text"]]
-    )
+    test_df_0 = test_df.assign(ID=test_df.dialog_id + "_0").rename({"participant_0_messages": "text"}, axis=1)[
+        ["ID", "text"]
+    ]
+    test_df_1 = test_df.assign(ID=test_df.dialog_id + "_1").rename({"participant_1_messages": "text"}, axis=1)[
+        ["ID", "text"]
+    ]
     test_prepared = pd.concat([test_df_0, test_df_1], ignore_index=True)
 
     ###############################################################################
