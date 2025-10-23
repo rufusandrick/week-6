@@ -2,10 +2,63 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import importlib
 import sys
 import types
 import uuid
-from collections.abc import AsyncGenerator
+from typing import Any, Never
+
+import pytest
+
+HTTP_STATUS_OK = 200
+HTTP_STATUS_UNAUTHORIZED = 401
+
+
+class FastAPIHTTPError(Exception):
+    def __init__(self, status_code: int, detail: str | None = None) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
+class Response:
+    def __init__(self, headers: dict[str, str] | None = None, status_code: int = HTTP_STATUS_OK) -> None:
+        self.headers = headers or {}
+        self.status_code = status_code
+
+
+class Request:
+    def __init__(self, path: str) -> None:
+        self.url = types.SimpleNamespace(path=path)
+
+
+class FastAPIStub:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
+        self._routes: dict[str, object] = {}
+
+    def middleware(self, _name: str) -> Any:
+        def decorator(func: Any) -> Any:
+            return func
+
+        return decorator
+
+    def post(self, path: str) -> Any:
+        def decorator(func: Any) -> Any:
+            self._routes[path] = func
+            return func
+
+        return decorator
+
+
+class HTTPBasicCredentials:
+    def __init__(self, username: str, password: str) -> None:
+        self.username = username
+        self.password = password
+
+
+class HTTPBasic:
+    async def __call__(self, _request: Request) -> HTTPBasicCredentials:  # pragma: no cover - default guard
+        raise FastAPIHTTPError(status_code=HTTP_STATUS_UNAUTHORIZED)
 
 
 def _ensure_fastapi_stub() -> None:
@@ -13,58 +66,16 @@ def _ensure_fastapi_stub() -> None:
         return
 
     fastapi_module = types.ModuleType("fastapi")
-
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: str | None = None) -> None:
-            super().__init__(detail)
-            self.status_code = status_code
-            self.detail = detail
-
-    class Response:
-        def __init__(self, headers: dict[str, str] | None = None, status_code: int = 200) -> None:
-            self.headers = headers or {}
-            self.status_code = status_code
-
-    class Request:
-        def __init__(self, path: str) -> None:
-            self.url = types.SimpleNamespace(path=path)
-
-    class FastAPI:
-        def __init__(self, *args, **kwargs) -> None:
-            self._routes: dict[str, object] = {}
-
-        def middleware(self, _name: str):
-            def decorator(func):
-                return func
-
-            return decorator
-
-        def post(self, path: str):
-            def decorator(func):
-                self._routes[path] = func
-                return func
-
-            return decorator
-
     security_module = types.ModuleType("fastapi.security")
 
-    class HTTPBasicCredentials:
-        def __init__(self, username: str, password: str) -> None:
-            self.username = username
-            self.password = password
-
-    class HTTPBasic:
-        async def __call__(self, request: Request) -> HTTPBasicCredentials:  # pragma: no cover - default guard
-            raise HTTPException(status_code=401)
-
-    security_module.HTTPBasic = HTTPBasic
-    security_module.HTTPBasicCredentials = HTTPBasicCredentials
-
-    fastapi_module.FastAPI = FastAPI
-    fastapi_module.HTTPException = HTTPException
+    fastapi_module.FastAPI = FastAPIStub
+    fastapi_module.HTTPException = FastAPIHTTPError
     fastapi_module.Request = Request
     fastapi_module.Response = Response
     fastapi_module.security = security_module
+
+    security_module.HTTPBasic = HTTPBasic
+    security_module.HTTPBasicCredentials = HTTPBasicCredentials
 
     sys.modules["fastapi"] = fastapi_module
     sys.modules["fastapi.security"] = security_module
@@ -74,18 +85,16 @@ def _ensure_pydantic_stub() -> None:
     if "pydantic" in sys.modules:
         return
 
-    import uuid as _uuid
-
     pydantic_module = types.ModuleType("pydantic")
 
     class BaseModel:
-        def __init__(self, **data) -> None:
+        def __init__(self, **data: object) -> None:
             for key, value in data.items():
                 setattr(self, key, value)
 
     pydantic_module.BaseModel = BaseModel
     pydantic_module.StrictStr = str
-    pydantic_module.UUID4 = _uuid.UUID
+    pydantic_module.UUID4 = uuid.UUID
 
     sys.modules["pydantic"] = pydantic_module
 
@@ -97,7 +106,7 @@ def _ensure_redis_stub() -> None:
     redis_module = types.ModuleType("redis")
 
     class Redis:
-        def __init__(self, *args, **kwargs) -> None:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
             self.store: dict[str, str] = {}
 
         def get(self, key: str) -> str | None:
@@ -110,28 +119,25 @@ def _ensure_redis_stub() -> None:
     sys.modules["redis"] = redis_module
 
 
-_ensure_fastapi_stub()
-_ensure_pydantic_stub()
-_ensure_redis_stub()
-
-
 try:  # pragma: no cover - only executed when numpy is available
     import numpy as np
 except ModuleNotFoundError:  # pragma: no cover - fallback stub
 
     class _Array(list):
-        def flatten(self) -> "_Array":
-            def _flatten(items):
+        def flatten(self) -> _Array:
+            def _flatten(items: Any) -> list[Any]:
+                flattened: list[Any] = []
                 for item in items:
                     if isinstance(item, (list, tuple, _Array)):
-                        yield from _flatten(item)
+                        flattened.extend(_flatten(item))
                     else:
-                        yield item
+                        flattened.append(item)
+                return flattened
 
             return _Array(_flatten(self))
 
         def tolist(self) -> list:
-            def _convert(items):
+            def _convert(items: Any) -> Any:
                 if isinstance(items, _Array):
                     return [_convert(value) for value in items]
                 if isinstance(items, list):
@@ -140,7 +146,7 @@ except ModuleNotFoundError:  # pragma: no cover - fallback stub
 
             return _convert(self)
 
-    def _array(data):  # type: ignore[override]
+    def _array(data: list[Any]) -> _Array:  # type: ignore[override]
         return _Array(data)
 
     numpy_stub = types.ModuleType("numpy")
@@ -151,13 +157,9 @@ except ModuleNotFoundError:  # pragma: no cover - fallback stub
     sys.modules["numpy"] = numpy_stub
     np = numpy_stub
 
-import pytest
-from fastapi.security import HTTPBasicCredentials
-
 
 def _ensure_triton_stub() -> None:
     """Provide a lightweight stub for the triton client if it is missing."""
-
     if "tritonclient.http.aio" in sys.modules:
         return
 
@@ -183,7 +185,7 @@ def _ensure_triton_stub() -> None:
         def __init__(self, url: str) -> None:  # pragma: no cover - safety net
             self.url = url
 
-        async def infer(self, *args, **kwargs):  # pragma: no cover - unused guard
+        async def infer(self, *_args: Any, **_kwargs: Any) -> Never:  # pragma: no cover - unused guard
             msg = "Stubbed client cannot perform inference"
             raise RuntimeError(msg)
 
@@ -201,7 +203,12 @@ def _ensure_triton_stub() -> None:
 
 _ensure_triton_stub()
 
-from youarebot.api import main as main_module
+_ensure_fastapi_stub()
+_ensure_pydantic_stub()
+_ensure_redis_stub()
+
+
+main_module = importlib.import_module("youarebot.api.main")
 
 
 class DummyRedis:
@@ -221,16 +228,16 @@ class DummyTritonResult:
     def __init__(self, value: float) -> None:
         self._value = value
 
-    def as_numpy(self, name: str) -> np.ndarray:  # pragma: no cover - name unused in tests
+    def as_numpy(self, _name: str) -> np.ndarray:  # pragma: no cover - name unused in tests
         return np.array([[self._value]])
 
 
 class DummyTritonClient:
     def __init__(self, value: float) -> None:
         self.value = value
-        self.calls: list[tuple[str, tuple, dict]] = []
+        self.calls: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
 
-    async def infer(self, model_name: str, *args, **kwargs) -> DummyTritonResult:
+    async def infer(self, model_name: str, *args: Any, **kwargs: Any) -> DummyTritonResult:
         self.calls.append((model_name, args, kwargs))
         return DummyTritonResult(self.value)
 
@@ -243,27 +250,27 @@ def dummy_redis(monkeypatch: pytest.MonkeyPatch) -> DummyRedis:
 
 
 @pytest.fixture
-def override_triton_client(monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[DummyTritonClient, None]:
+def override_triton_client(monkeypatch: pytest.MonkeyPatch) -> DummyTritonClient:
     client = DummyTritonClient(0.42)
     monkeypatch.setattr(main_module, "TRITON_CLIENT", client)
-    yield client
+    return client
 
 
 @pytest.mark.parametrize(
-    ("username", "password", "should_raise"),
-    (
-        (main_module.VALID_USERNAME, main_module.VALID_PASSWORD, False),
-        ("invalid", main_module.VALID_PASSWORD, True),
-        (main_module.VALID_USERNAME, "invalid", True),
-    ),
+    ("username", "password", "expected_exception"),
+    [
+        (main_module.VALID_USERNAME, main_module.VALID_PASSWORD, None),
+        ("invalid", main_module.VALID_PASSWORD, main_module.HTTPException),
+        (main_module.VALID_USERNAME, "invalid", main_module.HTTPException),
+    ],
 )
-def test_check_auth(username: str, password: str, should_raise: bool) -> None:
-    credentials = HTTPBasicCredentials(username=username, password=password)
+def test_check_auth(username: str, password: str, expected_exception: type[Exception] | None) -> None:
+    credentials = main_module.HTTPBasicCredentials(username=username, password=password)
 
-    if should_raise:
-        with pytest.raises(main_module.HTTPException) as exc_info:
+    if expected_exception is not None:
+        with pytest.raises(expected_exception) as exc_info:
             main_module.check_auth(credentials)
-        assert exc_info.value.status_code == 401
+        assert exc_info.value.status_code == HTTP_STATUS_UNAUTHORIZED
     else:
         main_module.check_auth(credentials)
 
@@ -277,22 +284,24 @@ def test_make_cache_key() -> None:
 def test_docs_require_auth() -> None:
     call_next_called = False
 
-    async def call_next(request: main_module.Request) -> main_module.Response:  # pragma: no cover - should not run
+    async def call_next(
+        _request: main_module.Request,
+    ) -> main_module.Response:  # pragma: no cover - should not run
         nonlocal call_next_called
         call_next_called = True
-        return main_module.Response(status_code=200)
+        return main_module.Response(status_code=HTTP_STATUS_OK)
 
     request = main_module.Request("/docs")
     response = asyncio.run(main_module.protect_docs(request, call_next))
 
-    assert response.status_code == 401
+    assert response.status_code == HTTP_STATUS_UNAUTHORIZED
     assert response.headers["WWW-Authenticate"] == "Basic"
     assert not call_next_called
 
 
 def test_docs_with_valid_auth(monkeypatch: pytest.MonkeyPatch) -> None:
     class AllowSecurity:
-        async def __call__(self, request: main_module.Request) -> main_module.HTTPBasicCredentials:
+        async def __call__(self, _request: main_module.Request) -> main_module.HTTPBasicCredentials:
             return main_module.HTTPBasicCredentials(
                 username=main_module.VALID_USERNAME,
                 password=main_module.VALID_PASSWORD,
@@ -302,13 +311,13 @@ def test_docs_with_valid_auth(monkeypatch: pytest.MonkeyPatch) -> None:
 
     call_next_invoked = {"value": False}
 
-    async def call_next(request: main_module.Request) -> main_module.Response:
+    async def call_next(_request: main_module.Request) -> main_module.Response:
         call_next_invoked["value"] = True
-        return main_module.Response(status_code=200)
+        return main_module.Response(status_code=HTTP_STATUS_OK)
 
     response = asyncio.run(main_module.protect_docs(main_module.Request("/docs"), call_next))
 
-    assert response.status_code == 200
+    assert response.status_code == HTTP_STATUS_OK
     assert call_next_invoked["value"] is True
 
 
@@ -325,7 +334,7 @@ def test_predict_uses_cache(dummy_redis: DummyRedis, monkeypatch: pytest.MonkeyP
     dummy_redis.set(cache_key, cache_value)
 
     class FailingClient:
-        async def infer(self, *args, **kwargs):  # pragma: no cover - should not be called
+        async def infer(self, *_args: Any, **_kwargs: Any) -> Never:  # pragma: no cover - should not be called
             raise AssertionError("Inference client should not be invoked when cache hits")
 
     monkeypatch.setattr(main_module, "TRITON_CLIENT", FailingClient())

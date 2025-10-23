@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path
 
 import pytest
+from dotenv import load_dotenv
+
+load_dotenv()
 
 mlflow = pytest.importorskip("mlflow")
 mlflow_sklearn = pytest.importorskip("mlflow.sklearn")
 mlflow.sklearn = mlflow_sklearn
-from dotenv import load_dotenv
-
-load_dotenv()
 
 username = os.getenv("MLFLOW_TRACKING_USERNAME")
 password = os.getenv("MLFLOW_TRACKING_PASSWORD")
@@ -31,12 +33,12 @@ def main() -> None:
     with dialog_path.open(encoding="utf-8") as file:
         dialog_data = json.load(file)
 
-    dialog_id, messages = next(iter(dialog_data.items()))  # Берём первые попавшиеся ключ и значение из словаря
-    first = " ".join([k["text"] for k in messages["0"] if k["participant_index"] == "0"])  # Фразы первого участника
-    second = " ".join([k["text"] for k in messages["0"] if k["participant_index"] == "1"])  # Фразы второго участника
-    messages = [first, second]
+    _dialog_id, messages = next(iter(dialog_data.items()))
+    first = " ".join(message["text"] for message in messages["0"] if message["participant_index"] == "0")
+    second = " ".join(message["text"] for message in messages["0"] if message["participant_index"] == "1")
+    texts = [first, second]
 
-    for _participant_index, msg in enumerate(messages):
+    for _participant_index, msg in enumerate(texts):
         model.predict_proba(msg)[0, 1]
 
 
