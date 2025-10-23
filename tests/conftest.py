@@ -5,7 +5,6 @@ import threading
 import trace
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable
 
 import pytest
 
@@ -47,7 +46,7 @@ class TraceCoveragePlugin:
         self._results = self.tracer.results()
         self._report()
 
-    def _iter_relevant_files(self) -> Iterable[Path]:
+    def _iter_relevant_files(self) -> list[Path]:
         if not self.base_path.exists():
             return []
 
@@ -69,7 +68,7 @@ class TraceCoveragePlugin:
     def _report(self) -> None:
         assert self._results is not None
         counts: dict[str, set[int]] = defaultdict(set)
-        for (filename, lineno), _hit in self._results.counts.items():
+        for filename, lineno in self._results.counts:
             counts[filename].add(lineno)
 
         summaries: list[tuple[str, int, int, float, list[int]]] = []
@@ -99,22 +98,28 @@ class TraceCoveragePlugin:
             total_statements += len(statements)
             total_executed += executed
 
+        terminal = self.config.pluginmanager.get_plugin("terminalreporter")
+        if terminal is None:
+            return
+
         if not summaries:
-            print("No files collected for coverage measurement.")
+            terminal.write_line("No files collected for coverage measurement.")
             return
 
         header = "Name"
-        print("\n---------- coverage: platform python ----------")
-        print(f"{header:<60} Stmts   Miss  Cover")
+        terminal.write_line("\n---------- coverage: platform python ----------")
+        terminal.write_line(f"{header:<60} Stmts   Miss  Cover")
         for name, stmts, miss, cover, missing in sorted(summaries):
             line = f"{name:<60} {stmts:5d} {miss:6d} {cover:6.2f}%"
             if self.report_option == "term-missing" and missing:
                 missing_text = ",".join(str(num) for num in missing)
                 line = f"{line}   Missing: {missing_text}"
-            print(line)
+            terminal.write_line(line)
 
         overall = 100.0 * total_executed / total_statements if total_statements else 100.0
-        print(f"TOTAL{'':<55} {total_statements:5d} {total_statements - total_executed:6d} {overall:6.2f}%")
+        terminal.write_line(
+            f"TOTAL{'':<55} {total_statements:5d} {total_statements - total_executed:6d} {overall:6.2f}%"
+        )
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -131,12 +136,12 @@ def pytest_configure(config: pytest.Config) -> None:
 
     report_option = config.getoption("--cov-report")
     plugin = TraceCoveragePlugin(config, cov_option, report_option)
-    config._trace_coverage_plugin = plugin  # type: ignore[attr-defined]
+    config.trace_coverage_plugin = plugin  # type: ignore[attr-defined]
     plugin.start()
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_unconfigure(config: pytest.Config) -> None:
-    plugin: TraceCoveragePlugin | None = getattr(config, "_trace_coverage_plugin", None)
+    plugin: TraceCoveragePlugin | None = getattr(config, "trace_coverage_plugin", None)
     if plugin is not None:
         plugin.stop()
