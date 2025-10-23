@@ -2,9 +2,7 @@ from pydantic import UUID4, BaseModel, StrictStr
 
 
 class IncomingMessage(BaseModel):
-    """Входная схема одного сообщения, которое нужно сохранить
-    и на основании которого проводится классификация диалога.
-    """
+    """Incoming message schema used for dialog classification."""
 
     text: StrictStr
     dialog_id: UUID4
@@ -13,13 +11,7 @@ class IncomingMessage(BaseModel):
 
 
 class Prediction(BaseModel):
-    """Результат классификации:
-    - id: уникальный идентификатор предсказания
-    - message_id: UUID сообщения, на которое мы отвечаем
-    - dialog_id: ID диалога
-    - participant_index: индекс участника
-    - is_bot_probability: вероятность, что в диалоге присутствует бот.
-    """
+    """Prediction result with dialog metadata and bot probability."""
 
     id: UUID4
     message_id: UUID4
