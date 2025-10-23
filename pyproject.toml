@@ -43,7 +43,9 @@ dev = [
     "ipdb>=0.13.13,<0.14",
     "isort>=5.13.2,<6",
     "mypy>=1.13.0,<2",
-    "pre-commit>=4.0.1,<5"
+    "pre-commit>=4.0.1,<5",
+    "pytest>=8.3.3,<9",
+    "pytest-cov>=6.0.0,<7"
 ]
 
 [tool.uv]

@@ -2,8 +2,11 @@ import json
 import os
 from pathlib import Path
 
-import mlflow
-import mlflow.sklearn
+import pytest
+
+mlflow = pytest.importorskip("mlflow")
+mlflow_sklearn = pytest.importorskip("mlflow.sklearn")
+mlflow.sklearn = mlflow_sklearn
 from dotenv import load_dotenv
 
 load_dotenv()
