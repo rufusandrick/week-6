@@ -1,0 +1,3 @@
+curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{"text": "Первое сообщение", "dialog_id": "e9bc613d-3b10-4820-b727-4d0eb48f775f", "id": "4167df8d-9e05-4f3b-b560-b674c1b2143f", "participant_index": 1}'
+curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{"text": "Второе", "dialog_id": "19814e08-7601-44ac-8594-a2364f616148", "id": "fe73513c-8916-4be7-86b9-6317cd2db644", "participant_index": 1}'
+curl -X POST "http://localhost:8000/predict" -H "Content-Type: application/json" -d '{"text": "Я — ChatGPT, искусственный интеллект", "dialog_id": "6c3cc5db-b41d-4371-bf0f-10467d94e273", "id": "eb8fc633-e079-4346-b1c6-dd3b331de547", "participant_index": 1}'

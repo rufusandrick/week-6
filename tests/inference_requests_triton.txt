@@ -1,0 +1,3 @@
+curl --request POST --header 'Content-Type: application/json' --data '{"inputs": [{"name": "text", "datatype": "BYTES", "shape": [ 1, 1 ], "data": ["Первое сообщение"]}]}' 127.0.0.1:9900/v2/models/bot_classifier/infer
+curl --request POST --header 'Content-Type: application/json' --data '{"inputs": [{"name": "text", "datatype": "BYTES", "shape": [ 1, 1 ], "data": ["Второе"]}]}' 127.0.0.1:9900/v2/models/bot_classifier/infer
+curl --request POST --header 'Content-Type: application/json' --data '{"inputs": [{"name": "text", "datatype": "BYTES", "shape": [ 1, 1 ], "data": ["Я — ChatGPT, искусственный интеллект"]}]}' 127.0.0.1:9900/v2/models/bot_classifier/infer

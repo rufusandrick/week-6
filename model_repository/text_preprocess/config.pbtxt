@@ -1,0 +1,28 @@
+name: "text_preprocess"
+backend: "python"
+max_batch_size: 128
+dynamic_batching {
+  max_queue_delay_microseconds: 1000
+}
+
+input [
+  {
+    name: "text"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  }
+]
+output [
+  {
+    name: "X"
+    data_type: TYPE_FP32
+    dims: [ 17874 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

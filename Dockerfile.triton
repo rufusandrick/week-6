@@ -1,0 +1,8 @@
+FROM nvcr.io/nvidia/tritonserver:25.09-py3
+
+COPY requirements_triton.txt requirements.txt
+RUN pip install -r requirements.txt
+
+COPY model_repository/ /models
+
+CMD /opt/tritonserver/bin/tritonserver --model-repository=/models/

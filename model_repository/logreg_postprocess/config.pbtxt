@@ -1,0 +1,26 @@
+name: "logreg_postprocess"
+backend: "python"
+max_batch_size: 128
+
+input [
+  {
+    name: "probabilities"
+    data_type: TYPE_FP32
+    dims: [ 2 ]
+  }
+]
+
+output [
+  {
+    name: "probability"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

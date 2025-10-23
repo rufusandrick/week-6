@@ -1,0 +1,108 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-mlflow
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - student_net
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: ${AWS_ACCESS_KEY_ID}
+      MINIO_ROOT_PASSWORD: ${AWS_SECRET_ACCESS_KEY}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - student_net
+  mlflow:
+    container_name: ${MLFLOW_HOST}
+    build:
+      context: .
+      dockerfile: Dockerfile.mlflow
+    depends_on:
+      - postgres
+      - minio
+    ports:
+      - "${MLFLOW_PORT}:${MLFLOW_PORT}"
+    environment:
+      MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_FLASK_SERVER_SECRET_KEY}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MLFLOW_S3_ENDPOINT_URL: ${MLFLOW_S3_ENDPOINT_URL}
+      MLFLOW_AUTH_CONFIG_PATH: /mlflow_config/basic_auth.ini
+    volumes:
+      - mlruns-data:/data
+    networks:
+      - student_net
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+      --serve-artifacts
+      --artifacts-destination s3://mlflow
+      --host 0.0.0.0
+      --allowed-hosts ${MLFLOW_HOST}:${MLFLOW_PORT},localhost:${MLFLOW_PORT},127.0.0.1:${MLFLOW_PORT}
+      --port ${MLFLOW_PORT}
+      --workers 1
+  redis:
+    image: redis:latest
+    container_name: ${REDIS_HOST}
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    networks:
+      - student_net
+  inference_service:
+    build:
+      context: .
+      dockerfile: Dockerfile.triton
+    container_name: inference-service
+    env_file:
+      - .env
+    ports:
+      - "${INFERENCE_SERVICE_PORT_TRITON}:${TRITON_HTTP_PORT}"
+      - "${TRITON_GRPC_PORT_EXTERNAL}:${TRITON_GRPC_PORT}"
+      - "${INFERENCE_METRICS_PORT}:${TRITON_METRICS_PORT}"
+    depends_on:
+      - redis
+      - mlflow
+    networks:
+      - student_net
+  youarebot:
+    build:
+      context: .
+      dockerfile: Dockerfile.fastapi
+    container_name: youarebot
+    env_file:
+      - .env
+    ports:
+      - "${SERVICE_PORT}:${SERVICE_PORT}"
+    networks:
+      - student_net
+    depends_on:
+      - mlflow
+      - postgres
+      - minio
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+networks:
+  student_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data: 
+  mlruns-data:

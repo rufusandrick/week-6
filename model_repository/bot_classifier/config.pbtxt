@@ -1,0 +1,58 @@
+name: "bot_classifier"
+platform: "ensemble"
+max_batch_size: 128
+
+input [
+  {
+    name: "text"
+    data_type: TYPE_STRING
+    dims: [ -1 ]
+  }
+]
+
+output [
+  {
+    name: "probability"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+ensemble_scheduling {
+  step {
+    model_name: "text_preprocess"
+    model_version: -1
+    input_map {
+      key: "text"
+      value: "text"
+    }
+    output_map {
+      key: "X"
+      value: "X"
+    }
+  }
+  step {
+    model_name: "logreg"
+    model_version: -1
+    input_map {
+      key: "X"
+      value: "X"
+    }
+    output_map {
+      key: "probabilities"
+      value: "probabilities"
+    }
+  }
+  step {
+    model_name: "logreg_postprocess"
+    model_version: -1
+    input_map {
+      key: "probabilities"
+      value: "probabilities"
+    }
+    output_map {
+      key: "probability"
+      value: "probability"
+    }
+  }
+}

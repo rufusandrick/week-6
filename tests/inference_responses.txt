@@ -1,0 +1,3 @@
+{"id":"0e3c5c43-95f0-4e09-ad0d-ea436b29936c","message_id":"4167df8d-9e05-4f3b-b560-b674c1b2143f","dialog_id":"e9bc613d-3b10-4820-b727-4d0eb48f775f","participant_index":1,"is_bot_probability":0.018509864807128906}
+{"id":"919ca4d4-5f0a-426b-9fa7-4b82716c9562","message_id":"fe73513c-8916-4be7-86b9-6317cd2db644","dialog_id":"19814e08-7601-44ac-8594-a2364f616148","participant_index":1,"is_bot_probability":0.022351950407028198}
+{"id":"b140b9e7-536b-4f26-9657-b081f41f23b6","message_id":"eb8fc633-e079-4346-b1c6-dd3b331de547","dialog_id":"6c3cc5db-b41d-4371-bf0f-10467d94e273","participant_index":1,"is_bot_probability":0.19017624855041504}
